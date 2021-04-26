@@ -1,2 +1,2 @@
 # Nodepaths
-A decentralised communication application using mesh topology, made with the Rust Language
+A distributed communication application built upon a wireless ad-hoc network using mesh topology, made with the Rust programming language.
