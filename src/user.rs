@@ -1,15 +1,16 @@
-use curve25519_dalek;
-use rand_core;
+mod ecc;
+
 use serde::{Deserialize, Serialize};
 use std::fs::OpenOptions;
 use std::io;
 use std::io::{Read, Write};
-use zeroize;
+use ecc::{PublicKey, StaticSecret}
+use rand_core::OsRng;
 
 #[derive(Serialize, Deserialize)]
 pub struct Keys {
-    public: Option<String>,
-    private: Option<String>,
+    public: Option<StaticSecret>,
+    private: Option<PublicKey>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -20,12 +21,12 @@ pub struct User {
 }
 
 impl User {
-    pub fn new(username: String) {
+    pub fn new(username: String) -> Self {
         User {
             username: get_username(),
             keys: create_ecc_key(),
             ipv4: create_ipv4(),
-        };
+        }
     }
     pub fn create_user_config(&self) {
         let mut file = OpenOptions::new()
@@ -57,9 +58,10 @@ fn get_username() -> String {
 }
 
 fn create_ecc_key() -> Keys {
+    let private: StaticSecret = StaticSecret::new(OsRng::new())
     Keys {
         public: Some("DFSFSF".to_string()),
-        private: Some("DFSFSF".to_string()),
+        private: private,
     }
 }
 
