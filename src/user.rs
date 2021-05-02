@@ -1,16 +1,13 @@
-mod ecc;
-
+use crate::x25519::{PublicKey, SecretKey, SharedSecret};
 use serde::{Deserialize, Serialize};
 use std::fs::OpenOptions;
 use std::io;
 use std::io::{Read, Write};
-use ecc::{PublicKey, StaticSecret}
-use rand_core::OsRng;
 
 #[derive(Serialize, Deserialize)]
 pub struct Keys {
-    public: Option<StaticSecret>,
-    private: Option<PublicKey>,
+    pub secret_key: [u8; 32],
+    pub public_key: [u8; 32],
 }
 
 #[derive(Serialize, Deserialize)]
@@ -21,50 +18,61 @@ pub struct User {
 }
 
 impl User {
-    pub fn new(username: String) -> Self {
-        User {
-            username: get_username(),
-            keys: create_ecc_key(),
-            ipv4: create_ipv4(),
-        }
-    }
-    pub fn create_user_config(&self) {
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .open("config.toml")
-            .expect("Couldn't create TOML file.");
-        file.write(toml::to_string(&self).unwrap().as_bytes());
-    }
-
-    pub fn load_user_config(&mut self) {
+    pub fn load_user() -> Self {
         let mut file = OpenOptions::new()
             .read(true)
+            .write(true)
             .create(true)
-            .open("config.toml")
+            .open("src/config.toml")
             .expect("Couldn't open config file.");
 
         let mut contents = String::new();
 
         file.read_to_string(&mut contents).unwrap();
-        *self = toml::from_str(&contents).unwrap();
+        let user: User = match toml::from_str(&contents) {
+            Err(_) => create_user_config(),
+            Ok(user) => user,
+        };
+
+        return user;
     }
+
+    pub fn create_shared_secret(&self, their_public: &PublicKey) -> SharedSecret {
+        return SecretKey::from(self.keys.secret_key).diffie_hellman(their_public);
+    }
+}
+pub fn create_user_config() -> User {
+    let user = User {
+        username: get_username(),
+        keys: create_ecc_keys(),
+        ipv4: create_ipv4(),
+    };
+
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .open("src/config.toml")
+        .expect("Couldn't create TOML file.");
+    file.write(toml::Value::try_from(&user).unwrap().to_string().as_bytes());
+
+    return user;
 }
 
 fn get_username() -> String {
     let mut input = String::new();
+    println!("Please enter a username: ");
     io::stdin().read_line(&mut input).unwrap();
     return input.trim().to_string();
 }
 
-fn create_ecc_key() -> Keys {
-    let private: StaticSecret = StaticSecret::new(OsRng::new())
+fn create_ecc_keys() -> Keys {
+    let secret_key: SecretKey = SecretKey::new();
     Keys {
-        public: Some("DFSFSF".to_string()),
-        private: private,
+        secret_key: secret_key.to_bytes(),
+        public_key: PublicKey::from(&secret_key).to_bytes(),
     }
 }
 
 fn create_ipv4() -> String {
-    return "hello".to_string();
+    return "192.168.458.345".to_string();
 }
