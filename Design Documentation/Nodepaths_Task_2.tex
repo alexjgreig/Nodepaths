@@ -118,7 +118,6 @@ path/.style={->,>=stealth,shorten >=1pt,semithick},
 \node [scale = 1, yshift = -1cm, xshift = 1.5cm, align=center, draw=red!60, fill=red!5, very thick] (u2) at (u1) {...};
 \node [scale =0.9, yshift = 1 cm, xshift = 2cm, align=center, draw=red!60, fill=red!5, very thick] (u3) at (u2) {Another User};
 \node [entity] (user3) [right = of profile] {User};
-\node [process, yshift = -4cm] (p-select) at (profile) {Picture Selection};
 
 % Paths
 
@@ -147,17 +146,17 @@ path/.style={->,>=stealth,shorten >=1pt,semithick},
 \draw [dashed](u1) -- (u3);
 \draw [stealth-stealth, semithick](u2) -- (chat);
 
-\draw [path] (profile) to [bend right = 20] (p-select);
-\draw [path] (user3) to [bend right = 20] node[align=center, pos=0.4, above, text width = 3cm, rotate=-3] {Selection} (profile);
-\draw [path] (user3) to [bend left = 20] node[align=center, pos=0.4, below, text width = 3cm, rotate=33] {Picture Selection} (p-select);
+\draw [path] (user3) to [bend right = 20] node[align=center, pos=0.2, above, text width = 3cm, rotate=-3] {New Username} (profile);
 
 \draw [path] (c_ip.west) to [bend right = 10] node[align=center, pos=0.4, xshift=-0.5cm, text width = 3cm] {IPv4} ($(c_ip.west)!3.6cm!(pstore2)$);
 \draw [path] (s_username.east) to [bend right = 15] node[align=center, pos=0.5, above, text width = 2cm, rotate=30] {Username} (c_ak.west);
 \draw [path] (c_ak) edge[out=330, in=70] node[align=center, pos=0.5, right, text width = 2cm] {Username \& Key Pair} ($(c_ak)!4.3cm!(pstore)$);
-\draw [path, transform canvas={yshift=-0.3cm}] (pstore) to [bend left = 10] node[align=center, pos=0.4, left, text width = 2cm] {Photos for Profile Picture} ($(pstore)!6.3cm!(user3.north)$);
+\draw [path] (profile) to [bend right = 30] node[align=center, rotate=65, pos=0.58, below]{Changed Username}($(profile)!7.5cm!(pstore)$);
 \draw [path, shorten >= 0.4cm] (chat) .. controls (-8, -13) and (-7.6, -11) .. node[align=center, pos=0.85, right, text width = 2cm] {Save Other User Credentials} (pstore2.200);
 \end{tikzpicture}
 \end{figure}
+
+\subsection{Structure Chart}
 
 \subsection{Algorithms}
 
@@ -179,139 +178,103 @@ The core algorithms that will be used in the application are displayed below, wr
 
 \begin{lstlisting}[caption=Main Program, escapechar=\@]
 	BEGIN MAINPROGRAM
-		@\underline{NodeCreation()}@
-		DISPLAY defaultUI() //Buttons and backgrounds that are common to all screens
-		conversationList as Array of Conversations //This includes node, recent messages, user info
-		OPEN "Phone Storage" for OUTPUT
-			WHILE <> EOF
-				line = READ line from "Phone Storage/PreviousConversations.txt"
-				APPEND line to conversationList
-			END WHILE
-		CLOSE "Phone Storage"
-		DISPLAY conversationButtons(conversationList) // Creates the buttons with previous information		
-		userPressQuit = False 
-		currentPage = messages
-		WHILE userPressQuit = False DO
-			IF UserPressedButton() == True:
-				IF userInput.button() == Quit
-					userPressQuit = True
-				ENDIF
-				ELSE IF userInput.button() == Plus \\Top right-hand corner of screen
-					DISPLAY screen(NewNode)
-					IF userInput == "Search Network" THEN
-						nodes = @\underline{SendData(RREQ, allUsers)}@
-						DISPLAY text "You have found these [nodes] around you" //listing the paths (nodes, friends) that returned from the sub-routine.	
-					ENDIF
-				ELSE IF userInput.button() == MenuBar
-					DISPLAY screen(userInput.menuBarType()) \\ Will Display the other screens that are part of the application when they are selected on the menu bar.
-					IF userInput.menuBarType() == Settings AND userSelection == Profile Picture THEN
-						userPicture = @\underline{selectPicture()}@
-					ENDIF
-				ELSE IF userInput.button == Conversation
-					DISPLAY screen(NodeMessage(UserID))
-					IF UserSendsMessage == True THEN
-						INPUT message
-						@\underline{SendData(message, userID)}@
-					ENDIF
-				ELSE
-					DISPLAY Error("Couldn't identitfy the user input")
-				ENDIF
-			ELSE
-				PASS
-			ENDIF
-		END WHILE			
+		username, keys, ipv4 = @\underline{LoadNode()}@
+		DISPLAY "Enter another Node's Username to Message or type Quit to Exit"
+		INPUT Selection
+		WHILE Selection <> "Quit" DO
+			Display "Please Input your message: "
+			Input Message 	
+			Reply = SendMessage(Message, TargetUser, Reply, keys[1]) //keys[1] is the secret key
+			Display Reply
+			DISPLAY "Enter another Node's Username to Message or type Quit to Exit"
+			INPUT Selection
+		END WHILE
 	END MAINPROGRAM
 \end{lstlisting}
 
 The main program above displays different processes, inputs and outputs that would be in the real program, however, this code isn't a full replication of the intended end product. If I was to create this application in full I would have more functions that separate the program into smaller pieces, making it easier to read and write. The first difference from the code above is I would separate all the screens into different functions however as previously mentioned this is impractical for the intention of the task.
 
-\begin{lstlisting}[caption=Node Creation, escapechar=\@]
-	BEGIN SUBPROGRAM @\underline{NodeCreation}@
+\begin{lstlisting}[caption=Load Node, escapechar=\@]
+	BEGIN  @\underline{LoadNode(username, keys, ipv4)}@
+		username = ""
+		keys = a fixed size array of allowing two byte arrays of length, 32 // [[u8; 32]; 2]
+		ipv4 = ""
+		OPEN "Phone Storage" for INPUT and OUTPUT
+			// Checking if config file exists, False if user is opening for the first time.
+			IF "PhoneStorage/config.toml".exists() == True DO
+				lines = READ lines from "Phone Storage/config.toml" into an array
+				//Below is cycling throught the node config file and loading the values into the program from storage
+				username = lines[0]
+				keys = lines[1].split[","]
+				ipv4 = lines[2]
 
-		success = False
-		DISPLAY landing_page()	// Displays the landing page with username input field (First UI Screen)
-		WHILE success == False DO
-			success = True
-			INPUT username
-			//Validates Length
-			IF username.len() >= 5 OR username.len() <= 20 THEN
-				success = True
-			ELSE
+			ELSE DO
+				CreateFile("PhoneStorage/config.toml")
+				INPUT unvalidated_username
+				//Validates Length
 				success = False
-			ENDIF
-			// Checks for special characters within username
-			IF username.contains_special_chars() == False THEN
-				success = True
-			ELSE
-				success = False
-			ENDIF
-		END WHILE
-		ipv4 = @\underline{IPv4Gen()}@
-		EccKey = @\underline{EccKeyGen()}@
-
-		OPEN "Phone Storage" for INPUT
-			WRITE username, ipv4, EccKey
+				WHILE success == False DO
+					IF unvalidated_username.len() >= 5 OR unvalidated_username.len() <= 20 THEN
+						success = True
+						username = unvalidated_username
+					ENDIF
+				END WHILE
+				ipv4 = @\underline{CreateIPv4()}@
+				keys = @\underline{CreateEccKeys(secretKey, publicKey)}@
+			END IF
+			WRITE username, ipv4, keys
 		CLOSE "Phone Storage"
-	END SUBPROGRAM @\underline{NodeCreation}@
+		RETURN username, keys, ipv4
+	END  @\underline{LoadNode}@
 \end{lstlisting}
 
 \begin{lstlisting}[caption=Elliptic-Curve Cryptographic (ECC) Key Generation, escapechar=\@]
-	BEGIN SUBPROGRAM @\underline{EccKeyGen}@
+	BEGIN  @\underline{CreateECCKeys(secretKey, publicKey}@
 
-		curve = get_curve('secp256k1')
+		curve = get_curve('curve25519')
 		k = rand_num(0, 627710173538668) //Parameters is the starting and ending range of the random number
-		privKey = k
-		pubKey = privKey * curve.g 
+		secretKey = k
+		publicKey = privKey * curve.basepoint 
 
-		RETURN privKey, pubKey
-	END SUBPROGRAM @\underline{EccKeyGen}@
+		RETURN secretKey, publicKey
+	END  @\underline{CreateECCKeys}@
 			
 \end{lstlisting}
-The Elliptic-Curve Cryptographic Algorithm is efficient and as fast as simply creating a random number, however, it allows for a private and public key to be created. The algorithm itself is based on an elliptic curve which are created through the equation: \[ y^2 = x^3 + ax + b \] Due to this equation given a curve which has infinite points, we will limit the curve to a finite field. To do this we use modular arithmetic which transforms the equation into the form: \[ y^2 = x^3 + ax + b(mod\ p)\] where p is a prime number between $3$ and $2^{256}$. This is a general equation for an elliptic graph however certain specific equations have been named such as secp256k1 (used in Bitcoin), which is \[y^2 = x^3 + 7 (mod\ 17) \] To check whether a point, for example $P(3,4)$, lies on this curve you substitute values in to x and y in the equation. A point G over an elliptic curve can be multiplied by an integer k and the result is another EC point P on the same curve and this operation is fast. This is the basis behind the key generation, we multiply a fixed EC point G (the generator point) by certain integer k (k can be considered as private key), we obtain an EC point P (its corresponding public key). It is very fast to calculate $P = k * G$ and extremely slow (considered infeasible for large k) to calculate $k = \frac{P}{G}$.
+The Elliptic-Curve Cryptographic Algorithm is efficient and as fast as simply creating a random number, however, it allows for a private and public key to be created. The algorithm itself is based on an elliptic curve which are created through the equation: \[ y^2 = x^3 + ax + b \] Due to this equation given a curve which has infinite points, we will limit the curve to a finite field. To do this we use modular arithmetic which transforms the equation into the form: \[ y^2 = x^3 + ax + b(mod\ p)\] where p is a prime number between $3$ and $2^{256}$. This is a general equation for an elliptic graph however certain specific equations have been named such as secp256k1 (used in Bitcoin), which is \[y^2 = x^3 + 7 (mod\ 17) \] To check whether a point, for example $P(3,4)$, lies on this curve you substitute values in to x and y in the equation. A point G over an elliptic curve can be multiplied by an integer k and the result is another EC point P on the same curve and this operation is fast. This is the basis behind the key generation, we multiply a fixed EC point G (the generator point or base point) by certain integer k (k can be considered as private key), we obtain an EC point P (its corresponding public key). It is very fast to calculate $P = k * G$ and extremely slow (considered infeasible for large k) to calculate $k = \frac{P}{G}$.
 
 \begin{lstlisting}[caption= IPv4 Creation, escapechar=\@]
-	BEGIN SUBPROGRAM @\underline{IPv4Gen}@
+	BEGIN  @\underline{IPv4Gen(ip)}@
 
-	base_ip = "192.168"
+	ip = "192.168"
 	FOR i = 0 to 1 DO
 		APPEND random_int(0, 255) to base_ip
 	NEXT i
 	END FOR
-	RETURN base_ip			
-	END SUBPROGRAM @\underline{IPv4Gen}@
+	RETURN ip	
+	END  @\underline{IPv4Gen}@
 \end{lstlisting}
 
 \begin{lstlisting}[caption=Send Data Packets over Network, escapechar=\@]
-	BEGIN SUBPROGRAM @\underline{SendData(Message, Users)}@
+	BEGIN  @\underline{SendMessage(Message, User, Reply, secretKey)}@
 		transmitter = WifiPeertoPeerApi()
-		OPEN "Phone Storage" for OUTPUT
-		WHILE <> EOF
-			READ line from "Phone Storage/User Data" 
-			IF line.starts_with() == (ipv4 OR EccKey OR Username)
-				Append line to UserInformation
-			ENDIF
-		END WHILE
-		transmitter.perform_handshake(Users)
-		transmitter.send_udp_packet(RREQ, Users, UserInformation) //finding the shortest path to the designated user
-		transmitter.send_udp_packet(Message, User, UserInformation)
-		If transmitter.recieves_reply() 
-			RETURN transmitter.reply()
-		ENDIF
-	END SUBPROGRAM @\underline{SendData}@
+		transmitter.perform_handshake(User)
+		transmitter.send_udp_packet(RREQ, User) //finding the shortest path to the designated user
+		timeout_time = 10
+		path = transmitter.reply(timeout_time)
+		transmitter.send_udp_packet(Request_Public_Key, User, path)
+		their_public_key = transmitter.reply(timeout_time)
+		shared_secret_key = diffie_hellman(secretKey, their_public_key)
+		encrypted_message = encrypt(Message, shared_secret_key)
+		transmitter.send_udp_packet(Message, User, path)
+		encrypted_reply = transmitter.reply(timeout_time)
+		Reply = decrypt(encrypted_reply, shared_secret_key)
+		RETURN Reply
+	END  @\underline{SendMessage}@
 			
 \end{lstlisting}
 
 \vspace{7mm}
 
-\begin{lstlisting}[caption=Select Profile Picture, escapechar=\@]
-	BEGIN SUBPROGRAM @\underline{selectPicture}@
-		OPEN DefaultPhotoViewingApp on DeviceScreen
-		picture = DefaultPhotoViewingApp.selection()
-		CLOSE DefaultPhotoViewingApp on DeviceScreen
-		RETURN picture
-	END SUBPROGRAM @\underline{selectPicture}@
-			
-\end{lstlisting}
 
 
 \renewcommand{\rmdefault}{cmr}

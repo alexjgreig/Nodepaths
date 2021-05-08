@@ -1,5 +1,5 @@
 # Fdb version 3
-["pdflatex"] 1620448064 "Nodepaths_Task_2.tex" "Nodepaths_Task_2.pdf" "Nodepaths_Task_2" 1620448066
+["pdflatex"] 1620457992 "Nodepaths_Task_2.tex" "Nodepaths_Task_2.pdf" "Nodepaths_Task_2" 1620457994
   "/etc/texmf/web2c/texmf.cnf" 1614151231 475 c0e671620eb5563b2130f56340a5fde8 ""
   "/usr/share/texlive/texmf-dist/fonts/enc/dvips/base/8r.enc" 1165713224 4850 80dc9bab7f31fb78a000ccfed0e27cab ""
   "/usr/share/texlive/texmf-dist/fonts/map/fontname/texfonts.map" 1577235249 3524 cb3e574dea2d1052e39280babc910dc8 ""
@@ -182,10 +182,10 @@
   "/usr/share/texmf/web2c/texmf.cnf" 1581979058 38841 ce3692aa899bb693b90b87eaa5d4d84e ""
   "/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map" 1614151278 4770781 1ed1abab22da9c3e2cc82e4db562318b ""
   "/var/lib/texmf/web2c/pdftex/pdflatex.fmt" 1614151313 8256067 8e9386066c73e6e7599f3f21355fa00a ""
-  "Nodepaths_Task_2.aux" 1620448066 2441 0a272d6e2c31a9a602da2d5e949d314b "pdflatex"
-  "Nodepaths_Task_2.out" 1620448066 336 e77894b8eb94e2d72ac67cd51f5b753e "pdflatex"
-  "Nodepaths_Task_2.tex" 1620448064 21104 694d52edd1e76b58117dfbd2b186bed6 ""
-  "Nodepaths_Task_2.toc" 1620448066 425 874d240e21d4dce0dadc69ae3bf32af7 "pdflatex"
+  "Nodepaths_Task_2.aux" 1620457994 2434 00ecdaad4087665ea7426a10c08852d1 "pdflatex"
+  "Nodepaths_Task_2.out" 1620457994 400 569787fc2862f360b9cf62923a6cc2eb "pdflatex"
+  "Nodepaths_Task_2.tex" 1620457993 19774 b3664bf2458f740417beea4b2debbc38 ""
+  "Nodepaths_Task_2.toc" 1620457994 506 055e23c5a74bc441da64c272060e2dad "pdflatex"
   "sta-logo.png" 1614685811 514211 9ec79e2798415eb3597022e557503dc0 ""
   (generated)
   "Nodepaths_Task_2.log"

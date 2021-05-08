@@ -1,5 +1,6 @@
 \contentsline {section}{\numberline {1}Project Portfolio}{2}{section.1}%
 \contentsline {subsection}{\numberline {1.1}Problem Definition}{2}{subsection.1.1}%
 \contentsline {subsection}{\numberline {1.2}Context and Data-flow Diagrams}{3}{subsection.1.2}%
-\contentsline {subsection}{\numberline {1.3}Algorithms}{5}{subsection.1.3}%
-\contentsline {subsection}{\numberline {1.4}Test data and expected outputs}{8}{subsection.1.4}%
+\contentsline {subsection}{\numberline {1.3}Structure Chart}{5}{subsection.1.3}%
+\contentsline {subsection}{\numberline {1.4}Algorithms}{5}{subsection.1.4}%
+\contentsline {subsection}{\numberline {1.5}Test data and expected outputs}{7}{subsection.1.5}%
