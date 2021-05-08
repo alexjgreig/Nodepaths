@@ -11,14 +11,14 @@ pub struct Keys {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct User {
+pub struct Node {
     pub username: String,
     pub keys: Keys,
     pub ipv4: String,
 }
 
-impl User {
-    pub fn load_user() -> Self {
+impl Node {
+    pub fn load_node() -> Self {
         let mut file = OpenOptions::new()
             .read(true)
             .write(true)
@@ -29,20 +29,20 @@ impl User {
         let mut contents = String::new();
 
         file.read_to_string(&mut contents).unwrap();
-        let user: User = match toml::from_str(&contents) {
-            Err(_) => create_user_config(),
-            Ok(user) => user,
+        let node: Node = match toml::from_str(&contents) {
+            Err(_) => create_node_config(),
+            Ok(node) => node,
         };
 
-        return user;
+        return node;
     }
 
     pub fn create_shared_secret(&self, their_public: &PublicKey) -> SharedSecret {
         return SecretKey::from(self.keys.secret_key).diffie_hellman(their_public);
     }
 }
-pub fn create_user_config() -> User {
-    let user = User {
+pub fn create_node_config() -> Node {
+    let node = Node {
         username: get_username(),
         keys: create_ecc_keys(),
         ipv4: create_ipv4(),
@@ -53,9 +53,9 @@ pub fn create_user_config() -> User {
         .create(true)
         .open("src/config.toml")
         .expect("Couldn't create TOML file.");
-    file.write(toml::Value::try_from(&user).unwrap().to_string().as_bytes());
+    file.write(toml::Value::try_from(&node).unwrap().to_string().as_bytes());
 
-    return user;
+    return node;
 }
 
 fn get_username() -> String {
