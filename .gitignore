@@ -1,3 +1,11 @@
 /target
 Cargo.lock
+/Design\ Documentation/*.aux
+/Design\ Documentation/*.fdb_latexmk
+/Design\ Documentation/*.fls
+/Design\ Documentation/*.log
+/Design\ Documentation/*.out
+/Design\ Documentation/*.pyg
+/Design\ Documentation/*.gz
+/Design\ Documentation/*.toc
 
