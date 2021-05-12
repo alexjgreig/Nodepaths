@@ -14,7 +14,6 @@
 \usepackage{subcaption}
 \usepackage{listings}
 
-
 \hypersetup{
 	colorlinks=true,
 	linktoc=all,    
@@ -273,30 +272,55 @@ The Elliptic-Curve Cryptographic Algorithm is efficient and as fast as simply cr
 			
 \end{lstlisting}
 
-\vspace{7mm}
+\vfill{}
 
-
-
-\renewcommand{\rmdefault}{cmr}
 \subsection{Test data and expected outputs}
-	\vspace{2mm}
-	\begin{tabularx}{\linewidth}{ |*{3}{X|}}
-	\hline 
-	\multicolumn{1}{|>{\centering}X|}{Input} &
-	\multicolumn{1}{>{\centering}X|}{Processing} &
-	\multicolumn{1}{>{\centering}X|}{Output} \\
-	\hline\hline
-	The user opens the application for the first time, and they are asked to input a username. & The application calculates a pseudo-random number with a uniform distribution to create a IPv4 address in the range of 192.168.1.0 to 192.168.254.255. It then creates an asymmetric key pair, a private and public key that will be used for identification of nodes and end-to-end encryption of data transmissions. It then takes the username that was inputed and validates it, checking that the length is between 5 and 20 characters and doesn't contain any special characters. The username, the IPv4 address and the key pair are stored securely in the phone storage & If a username was inputted that doesn't meet the required validation then the user will be redirected to enter another username. A loading screen is displayed with text saying, ``Setting up Profile and Configuration." This happens while waiting for operations to be complete, then welcome text appears when done and a main menu appears. \\
-	\hline\hline
-	The user selects the option on the main menu, ``Search for users on the network." & Using the mobile phone's API for peer-to-peer Wi-Fi connections it sends out a Wi-Fi signal and also listens for incoming Wi-Fi connections. It sends a data packet on the network containing the username and searches for users with the same name. If there are multiple users with the same username then the user can select the profile they want. The two nodes establish a connection and communication is available & The user is prompted with the different users that have the username they searched, it then displays the ability to add them. If they add a node as a friend, the text, ``Successfully added [username] as a friend" will be displayed.  \\
-	\hline\hline
-	The user scans a QR code of another user. & The QR code is a representation of the public key, IP address and username of a user and when it is scanned, it is saved onto the mobile phone's storage & Display text, "Successfully added [username] as a friend"  \\
-	\hline\hline
-	When in the chat section of the application the user selects a user to message, they then send a text to them. & The application, utilising the ad-hoc on-demand vector routing protocol will flood the network with Route Request Packets via UDP, if the route is found then a Route Reply packet will be sent, this contains the shortest path between users. When the path is created using TCP, the public keys will be exchanged. The message will be encrypted with the other user's public key and transmitted across the network. The message will be validated to make sure the packet size isn't larger than 100 MB. & Once the message has been sent, the message on the user's screen goes blue, displaying to the user that the message has been transmitted. \\
-	\hline\hline
-	Within the profile section of the application the user can select to add a photo to their profile. & The application will open the default picture viewing application on the phone and allow the user to select a picture. The user can scale the photo to fit inside a circle with diameter of 1000 pixels. & The default photo viewing application will be displayed, then the text, "Successfully added the profile picture," will be displayed once the picture is scaled and fitted to the profile picture template.\\
-\hline
-\end{tabularx}
+\lstset{
+	basicstyle=\small\ttfamily,
+	captionpos=t,
+	numbers=left,
+	tabsize=4,
+	keywordstyle=\bfseries,
+	breaklines=true,
+	columns=fullflexible,
+	numbersep=-8pt, 
+	frame = shadowbox,
+	morekeywords={BEGIN, END, DISPLAY, INPUT, IF, ENDIF, WHILE, DO, ELSE, THEN, OR, OPEN, RETURN, WRITE, NEXT, FOR, APPEND, CLOSE, PASS, AND, OUTPUT}
+}
+\begin{lstlisting}[caption=Rust Tests, escapechar=\@]
 
+	#[cfg(test)]
+	mod test {
+	    use super::*;
+
+	    #[test]
+	    fn load_node_config() {
+		let node: Node = Node::load_node();
+	    }
+	    #[test]
+	    fn encrypt_decrypt_roundtrip() {
+		let node: Node = Node::load_node();
+		let original_message = "Hello".to_string();
+		let their_public: PublicKey = PublicKey::from([0u8; 32]);
+		let shared_secret = SecretKey::from(node.keys.secret_key).diffie_hellman(&their_public);
+		let enc_msg = shared_secret.encrypt(original_message.clone());
+		let dec_msg = shared_secret.decrypt(enc_msg);
+		assert_eq!(
+		    original_message.clone(),
+		    dec_msg.trim_end_matches(char::from(0))
+		);
+	    }
+	}
+\end{lstlisting}
+\renewcommand{\rmdefault}{cmr}
+As shown above, I have implemented tests into the my Rust application. The two tests above check if the application is able to: \\
+
+1) Open or create a TOML file which is the configuration for the user's node and load it into the program from storage to memory to be utilised by the application. \\
+
+2) Perform a roundtrip from an original message, to an encrypted message using the curve25519 and AES encryption scheme then finally decrypt the message. It then checks if the decrypted message is the same as the original message as this is needed for end-to-end lossless encrypted data transfer. The macro "assert\_eq" checks whether the original and decrypted message are the same.\\
+
+Below is the return of the application when you run the tests and both pass: \\
+
+\includegraphics[width=1\textwidth]{tests_running.png}\par
 \end{document}
 

@@ -1,11 +1,3 @@
-mod node;
-mod x25519;
-
-use node::Node;
-use x25519::PublicKey;
-use x25519::SecretKey;
-
-fn main() {}
 
 #[cfg(test)]
 mod test {
