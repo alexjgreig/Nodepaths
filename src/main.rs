@@ -1,9 +1,9 @@
+mod cryptography;
 mod node;
-mod x25519;
 
+use cryptography::PublicKey;
+use cryptography::SecretKey;
 use node::Node;
-use x25519::PublicKey;
-use x25519::SecretKey;
 
 fn main() {}
 

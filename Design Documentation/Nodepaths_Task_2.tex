@@ -156,6 +156,7 @@ path/.style={->,>=stealth,shorten >=1pt,semithick},
 \end{figure}
 
 \subsection{Structure Chart}
+\includegraphics[width=1\textwidth]{structure_chart.png}\par
 
 \subsection{Algorithms}
 
@@ -319,7 +320,7 @@ As shown above, I have implemented tests into the my Rust application. The two t
 
 2) Perform a roundtrip from an original message, to an encrypted message using the curve25519 and AES encryption scheme then finally decrypt the message. It then checks if the decrypted message is the same as the original message as this is needed for end-to-end lossless encrypted data transfer. The macro "assert\_eq" checks whether the original and decrypted message are the same.\\
 
-Below is the return of the application when you run the tests and both pass: \\
+Below is the output that is returned to the developer when you run the unit tests and when both tests pass: \\
 
 \includegraphics[width=1\textwidth]{tests_running.png}\par
 \end{document}

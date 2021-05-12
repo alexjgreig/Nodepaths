@@ -1,4 +1,4 @@
-use crate::x25519::{PublicKey, SecretKey, SharedSecret};
+use crate::cryptography::{PublicKey, SecretKey, SharedSecret};
 use serde::{Deserialize, Serialize};
 use std::fs::OpenOptions;
 use std::io;
