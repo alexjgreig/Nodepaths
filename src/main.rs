@@ -5,7 +5,9 @@ use cryptography::PublicKey;
 use cryptography::SecretKey;
 use node::Node;
 
-fn main() {}
+fn main() {
+    println!("hello");
+}
 
 #[cfg(test)]
 mod test {

@@ -17,6 +17,8 @@ c_serde = { package = "serde", version = "1.0.125", default-features = false, op
 bincode = "1.3.3"
 aes = "0.7.0"
 typenum = "1.13.0"
+bindings = {path = "bindings"}
+windows = "0.10.0"
 
 [features]
 curve_serde = ["c_serde", "curve25519-dalek/serde"]
