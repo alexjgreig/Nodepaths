@@ -22,18 +22,31 @@ fn main() -> windows::Result<()> {
     let mut avail_nets: *mut WLAN_AVAILABLE_NETWORK_LIST = ptr::null_mut();
     unsafe {
         let value = WlanOpenHandle(1u32, ptr::null_mut(), &mut 1u32, client);
-        println!("Return {}", value);
         let result = WlanEnumInterfaces(*client, ptr::null_mut(), &mut interface);
-        println!("{}", result);
-        let guid: *const Guid = &((*interface).InterfaceInfo[0].InterfaceGuid);
-        let list =
-            WlanGetAvailableNetworkList(*client, guid, 2u32, ptr::null_mut(), &mut avail_nets);
-        println!("{:?}", list);
 
-        // for i in 0..(*avail_nets).dwNumberOfItems {
-        //   println!("{:?}", (*avail_nets).Network[i as usize]);
-        //}
-        println!("{:?}", *(avail_nets));
+        for i in 0..(*interface).dwNumberOfItems {
+            println!(
+                "{:?}\n",
+                *(ptr::addr_of!((*interface).InterfaceInfo).offset(i as isize))
+            );
+        }
+
+        let guid: *const Guid = &((*interface).InterfaceInfo[0].InterfaceGuid);
+
+        let ret =
+            WlanGetAvailableNetworkList(*client, guid, 0u32, ptr::null_mut(), &mut avail_nets);
+
+        /* I'm guessing you're trying to do a regular Rustlike index, or dereference the pointer into a variable
+        which won't work because the structure's actually variable-sized; the header says the array is of size 1 but the extra items are past the end of the struct, and you have to use pointer math to find them
+        getting the nth network would look like seri — Today at 20:17
+        */
+
+        for i in 0..(*avail_nets).dwNumberOfItems {
+            println!(
+                "{:?}\n",
+                *(ptr::addr_of!((*avail_nets).Network).offset(i as isize))
+            );
+        }
 
         thread::sleep(Duration::from_millis(150000000));
     }
