@@ -20,6 +20,7 @@ typenum = "1.13.0"
 
 bindings = {path = "bindings"}
 windows = "0.10.0"
+futures = "0.3.15"
 
 
 [features]

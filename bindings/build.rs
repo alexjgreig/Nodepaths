@@ -1,6 +1,9 @@
 fn main() {
     windows::build!(
-    Windows::Win32::NetworkManagement::WiFi::*,
-    Windows::Win32::System::SystemServices::HANDLE,
+        Windows::Devices::WiFiDirect::*,
+        Windows::Devices::Enumeration::*,
+        Windows::Networking::Sockets::*,
+        Windows::Foundation::*,
+        Windows::Storage::Streams::*,
     );
 }
