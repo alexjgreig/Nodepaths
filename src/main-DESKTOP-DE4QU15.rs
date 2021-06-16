@@ -45,18 +45,15 @@ use std::convert::TryFrom;
 use std::convert::TryInto;
 use std::mem;
 use std::ptr;
-use std::rc::Rc;
-use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
 use futures::executor::block_on;
 use futures::future::Future;
 
-#[derive(Clone)]
 struct ConnectedDevice {
     display_name_in: HSTRING,
-    wfd_device_in: Arc<WiFiDirectDevice>,
+    wfd_device_in: WiFiDirectDevice,
     socket_rw_in: SocketReaderWriter,
 }
 
@@ -66,7 +63,7 @@ struct Advertiser {
     publisher: WiFiDirectAdvertisementPublisher,
     listener: WiFiDirectConnectionListener,
     information_elements: Vec<WiFiDirectInformationElement>,
-    connected_devices: Arc<Mutex<Vec<ConnectedDevice>>>,
+    connected_devices: Vec<ConnectedDevice>,
     status_changed_token: EventRegistrationToken,
     connection_requested_token: EventRegistrationToken,
 }
@@ -80,31 +77,24 @@ impl Advertiser {
         let publisher: WiFiDirectAdvertisementPublisher =
             WiFiDirectAdvertisementPublisher::new().unwrap();
 
-        let mut connected_devices: Arc<Mutex<Vec<ConnectedDevice>>> =
-            Arc::new(Mutex::new(Vec::new()));
-
         let status_changed_token = publisher
             .StatusChanged(&TypedEventHandler::new(Advertiser::on_status_changed))
             .unwrap();
 
         let listener: WiFiDirectConnectionListener = WiFiDirectConnectionListener::new().unwrap();
-
-        let connected_devices_c = Arc::clone(&connected_devices);
         let connection_requested_token = listener
             .ConnectionRequested(&TypedEventHandler::new(
-                move |sender: &Option<WiFiDirectConnectionListener>,
-                      args: &Option<WiFiDirectConnectionRequestedEventArgs>| {
+                |sender: &Option<WiFiDirectConnectionListener>,
+                 args: &Option<WiFiDirectConnectionRequestedEventArgs>| {
                     let (sender, args) = (sender.clone(), args.clone());
-                    block_on(Advertiser::on_connection_requested(
-                        &sender,
-                        &args,
-                        Arc::clone(&connected_devices_c),
-                    ));
+                    block_on(Advertiser::on_connection_requested(&sender, &args));
                     //TODO Add error handling with Result by add windows result to handler functions
                     Ok(())
                 },
             ))
             .unwrap();
+
+        let connected_devices: Vec<ConnectedDevice> = Vec::new();
 
         let discoverability = WiFiDirectAdvertisementListenStateDiscoverability::Normal;
         publisher
@@ -117,7 +107,7 @@ impl Advertiser {
             .unwrap()
             .InformationElements()
             .unwrap()
-            .Clear();
+            .ReplaceAll(information_elements);
 
         publisher.Start();
         if (publisher.Status().unwrap() == WiFiDirectAdvertisementPublisherStatus::Started) {
@@ -129,13 +119,13 @@ impl Advertiser {
             publisher: publisher,
             listener: listener,
             information_elements: information_elements,
-            connected_devices: Arc::clone(&connected_devices),
+            connected_devices: connected_devices,
             status_changed_token: status_changed_token,
             connection_requested_token: connection_requested_token,
         }
     }
 
-    fn stop(&mut self) {
+    fn stop(&self) {
         &self.publisher.Stop();
         &self
             .publisher
@@ -160,8 +150,8 @@ impl Advertiser {
         } else {
             println!(
                 "Advertisement: Status: {:?} Error: {:?}",
-                e.as_ref().unwrap().Status().unwrap(),
-                e.as_ref().unwrap().Error()
+                e.unwrap().Status().unwrap(),
+                e.unwrap().Error()
             );
             //Change for an error message later
             Ok(())
@@ -169,10 +159,10 @@ impl Advertiser {
     }
 
     async fn on_socket_connection_received(
+        &mut self,
         sender: &Option<StreamSocketListener>,
         e: &Option<StreamSocketListenerConnectionReceivedEventArgs>,
-        wfd_device: Arc<WiFiDirectDevice>,
-        connected_devices: Arc<Mutex<Vec<ConnectedDevice>>>,
+        wfd_device: WiFiDirectDevice,
     ) {
         println!("Connecting to remote side on L4 layer...");
         let server_socket: StreamSocket = e.as_ref().unwrap().Socket().unwrap();
@@ -183,16 +173,16 @@ impl Advertiser {
         let mut message: HSTRING = socket_rw.read_message_async().await;
 
         //Add this connection to the list of active connections.
-        let mut connected_devices = connected_devices.lock().unwrap();
-        connected_devices.push(ConnectedDevice {
+        self.connected_devices.push(ConnectedDevice {
             display_name_in: message.clone(),
-            wfd_device_in: wfd_device,
+            wfd_device_in: wfd_device.clone(),
             socket_rw_in: socket_rw,
         });
 
         //Keep reading messages until the socket is closed
         while (!&message.is_empty()) {
-            message = connected_devices
+            message = self
+                .connected_devices
                 .last()
                 .unwrap()
                 .socket_rw_in
@@ -201,13 +191,9 @@ impl Advertiser {
         }
     }
 
-    /*
     async fn get_pin_from_user_async() -> HSTRING {
         unimplemented!();
     }
-
-    //Advanced Pairing
-
 
     async fn request_pair_device_async(pairing: DeviceInformationPairing) -> bool {
         let connection_params = WiFiDirectConnectionParameters::new().unwrap();
@@ -239,10 +225,7 @@ impl Advertiser {
 
         return true;
     }
-    */
 
-    /*
-    Advanced Pairing Parameters
     async fn is_aep_paired_async(device_id: HSTRING) -> bool {
         let dev_info = DeviceInformation::CreateFromIdAsyncAdditionalProperties(
             device_id,
@@ -280,11 +263,10 @@ impl Advertiser {
             }
         }
     }
-    */
 
     async fn handle_connection_request_async(
-        connection_request: &WiFiDirectConnectionRequest,
-        connected_devices: Arc<Mutex<Vec<ConnectedDevice>>>,
+        &self,
+        connection_request: WiFiDirectConnectionRequest,
     ) -> bool {
         let device_name: HSTRING = connection_request
             .DeviceInformation()
@@ -297,35 +279,49 @@ impl Advertiser {
             .Pairing()
             .unwrap();
 
-        println!("Connection request recieved from {:?}", device_name);
-
-        //ask for user input to see if true TODO
-
-        let accept: bool = true;
-
-        //Decline request
-        if !accept {
-            return false;
-        }
-
-        println!("Connecting to {:?} ...", device_name);
-
-        //pair device if not already paired
-
-        // Advertiser::request_pair_device_async(pairing).await;
-
-        let wfd_device: Arc<WiFiDirectDevice> = Arc::new(
-            WiFiDirectDevice::FromIdAsync(
+        let is_paired: bool = (pairing.IsPaired().unwrap())
+            || (Advertiser::is_aep_paired_async(
                 connection_request
                     .DeviceInformation()
                     .unwrap()
                     .Id()
                     .unwrap(),
             )
-            .unwrap()
-            .await
-            .unwrap(),
-        );
+            .await);
+
+        if is_paired {
+            println!("Connection request recieved from {:?}", device_name);
+
+            //ask for user input to see if true TODO
+
+            let accept: bool = true;
+
+            //Decline request
+            if !accept {
+                return false;
+            }
+        }
+
+        println!("Connecting to {:?} ...", device_name);
+
+        //pair device if not already paired
+
+        if !is_paired {
+            if (!Advertiser::request_pair_device_async(pairing).await) {
+                return false;
+            }
+        }
+
+        let wfd_device: WiFiDirectDevice = WiFiDirectDevice::FromIdAsync(
+            connection_request
+                .DeviceInformation()
+                .unwrap()
+                .Id()
+                .unwrap(),
+        )
+        .unwrap()
+        .await
+        .unwrap();
 
         // If the status of the connection is changed TODO
         // connectionStatusChangedToken
@@ -336,17 +332,14 @@ impl Advertiser {
         // 2. It allows us to map the listenerSocket to the corresponding WiFiDirectDevice
         //    when the connection is received.
         //
-        let wfd_device_c = Arc::clone(&wfd_device);
+
         listener_socket
             .ConnectionReceived(TypedEventHandler::new(
-                move |sender: &Option<StreamSocketListener>,
+                |sender: &Option<StreamSocketListener>,
                  args: &Option<StreamSocketListenerConnectionReceivedEventArgs>| {
                     let (sender, args) = (sender.clone(), args.clone());
                     block_on(Advertiser::on_socket_connection_received(
-                        &sender,
-                        &args,
-                        Arc::clone(&wfd_device_c),
-                        Arc::clone(&connected_devices),
+                        &mut self, &sender, &args, wfd_device,
                     ));
                     //TODO Add error handling with Result by add windows result to handler functions
                     Ok(())
@@ -354,14 +347,13 @@ impl Advertiser {
             ))
             .unwrap();
 
-        let endpoint_pairs: IVectorView<EndpointPair> = Arc::clone(&wfd_device)
-            .GetConnectionEndpointPairs()
-            .unwrap();
+        let endpoint_pairs: IVectorView<EndpointPair> =
+            wfd_device.GetConnectionEndpointPairs().unwrap();
 
         // TODO add a global setting for the server por
         listener_socket
             .BindEndpointAsync(
-                endpoint_pairs.GetAt(0).unwrap().LocalHostName().unwrap(),
+                endpoint_pairs.GetAt(0).unwrap().LocalHostName(),
                 HSTRING::try_from("50001".to_string()).unwrap(),
             )
             .unwrap()
@@ -385,17 +377,14 @@ impl Advertiser {
     async fn on_connection_requested(
         sender: &Option<WiFiDirectConnectionListener>,
         e: &Option<WiFiDirectConnectionRequestedEventArgs>,
-        connected_devices: Arc<Mutex<Vec<ConnectedDevice>>>,
     ) {
         // body of your event handler
         let connection_request: WiFiDirectConnectionRequest =
-            e.as_ref().unwrap().GetConnectionRequest().unwrap();
-        if (!Advertiser::handle_connection_request_async(&connection_request, connected_devices)
-            .await)
-        {
+            e.unwrap().GetConnectionRequest().unwrap();
+        if (!Advertiser::handle_connection_request_async(connection_request).await) {
             println!(
                 "Connection request from {:?} was declined",
-                &connection_request.DeviceInformation().unwrap().Name()
+                connection_request.DeviceInformation().unwrap().Name()
             );
             connection_request.Close();
         }
