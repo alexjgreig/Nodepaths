@@ -36,7 +36,7 @@ impl SocketReaderWriter {
         &self.stream_socket.Close();
     }
 
-    async fn write_message_async(&self, message: HSTRING) {
+    pub async fn write_message_async(&self, message: HSTRING) {
         &self
             .data_writer
             .WriteUInt32(self.data_writer.MeasureString(message.clone()).unwrap());

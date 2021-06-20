@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 curve25519-dalek = "3.1.0"
-rand = "0.8.3"
+rand = "0.8.4"
 toml = "0.5.8"
 # `serde` is renamed to `c_serde` in order to avoid a name collision between
 # importing the serde dependency and enabling the curve25519-dalek/serde feature
@@ -21,6 +21,7 @@ typenum = "1.13.0"
 bindings = {path = "bindings"}
 windows = "0.10.0"
 futures = "0.3.15"
+tokio = { version = "1.7.0", features = ["full"] }
 
 
 [features]

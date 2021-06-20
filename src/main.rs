@@ -4,462 +4,48 @@ mod socket_reader_writer;
 
 use cryptography::PublicKey;
 use cryptography::SecretKey;
+use node::Config;
 use node::Node;
-use socket_reader_writer::SocketReaderWriter;
 
-use bindings::Windows::Devices::Enumeration::DeviceInformation;
-use bindings::Windows::Devices::Enumeration::DeviceInformationCollection;
-use bindings::Windows::Devices::Enumeration::DeviceInformationCustomPairing;
-use bindings::Windows::Devices::Enumeration::DeviceInformationPairing;
-use bindings::Windows::Devices::Enumeration::DevicePairingKinds;
-use bindings::Windows::Devices::Enumeration::DevicePairingProtectionLevel;
-use bindings::Windows::Devices::Enumeration::DevicePairingResult;
-use bindings::Windows::Devices::Enumeration::DevicePairingResultStatus;
-use bindings::Windows::Devices::Enumeration::*;
-use bindings::Windows::Devices::WiFiDirect::WiFiDirectAdvertisementListenStateDiscoverability;
-use bindings::Windows::Devices::WiFiDirect::WiFiDirectAdvertisementPublisher;
-use bindings::Windows::Devices::WiFiDirect::WiFiDirectAdvertisementPublisherStatus;
-use bindings::Windows::Devices::WiFiDirect::WiFiDirectAdvertisementPublisherStatusChangedEventArgs;
-use bindings::Windows::Devices::WiFiDirect::WiFiDirectConnectionListener;
-use bindings::Windows::Devices::WiFiDirect::WiFiDirectConnectionParameters;
-use bindings::Windows::Devices::WiFiDirect::WiFiDirectConnectionRequest;
-use bindings::Windows::Devices::WiFiDirect::WiFiDirectConnectionRequestedEventArgs;
-use bindings::Windows::Devices::WiFiDirect::WiFiDirectDevice;
-use bindings::Windows::Devices::WiFiDirect::WiFiDirectInformationElement;
-use bindings::Windows::Foundation::Collections::IIterable;
-use bindings::Windows::Foundation::Collections::IVectorView;
-use bindings::Windows::Foundation::EventRegistrationToken;
-use bindings::Windows::Foundation::*;
-use bindings::Windows::Networking::EndpointPair;
-use bindings::Windows::Networking::Sockets::StreamSocket;
-use bindings::Windows::Networking::Sockets::StreamSocketListener;
-use bindings::Windows::Networking::Sockets::StreamSocketListenerConnectionReceivedEventArgs;
-use bindings::Windows::Networking::Sockets::*;
-use bindings::Windows::Storage::Streams::ByteOrder;
-use bindings::Windows::Storage::Streams::UnicodeEncoding;
+use std::io::{stdin, stdout, Write};
 
-use windows::HSTRING;
+#[tokio::main]
+async fn main() {
+    println!(
+        "
+███╗   ██╗ ██████╗ ██████╗ ███████╗██████╗  █████╗ ████████╗██╗  ██╗███████╗
+████╗  ██║██╔═══██╗██╔══██╗██╔════╝██╔══██╗██╔══██╗╚══██╔══╝██║  ██║██╔════╝
+██╔██╗ ██║██║   ██║██║  ██║█████╗  ██████╔╝███████║   ██║   ███████║███████╗
+██║╚██╗██║██║   ██║██║  ██║██╔══╝  ██╔═══╝ ██╔══██║   ██║   ██╔══██║╚════██║
+██║ ╚████║╚██████╔╝██████╔╝███████╗██║     ██║  ██║   ██║   ██║  ██║███████║
+╚═╝  ╚═══╝ ╚═════╝ ╚═════╝ ╚══════╝╚═╝     ╚═╝  ╚═╝   ╚═╝   ╚═╝  ╚═╝╚══════╝
+_____________________________________________________________________________
+_____________________________________________________________________________
+\n\n\n
 
-use std::collections::BTreeMap;
-use std::convert::TryFrom;
-use std::convert::TryInto;
-use std::mem;
-use std::ptr;
-use std::rc::Rc;
-use std::sync::{Arc, Mutex};
-use std::thread;
-use std::time::Duration;
+Select an option:
 
-use futures::executor::block_on;
-use futures::future::Future;
+(1) Advertise
+(2) Connect
+"
+    );
+    let mut input = String::new();
+    stdin().read_line(&mut input).unwrap();
+    let selection = input.trim().to_string();
 
-#[derive(Clone)]
-struct ConnectedDevice {
-    display_name_in: HSTRING,
-    wfd_device_in: Arc<WiFiDirectDevice>,
-    socket_rw_in: SocketReaderWriter,
-}
+    let mut created_node = false;
 
-//TODO: MOVE ADVERTISER INTO SEPARATE FILE, Possibly make it the node and have a generic structure.
-
-struct Advertiser {
-    publisher: WiFiDirectAdvertisementPublisher,
-    listener: WiFiDirectConnectionListener,
-    information_elements: Vec<WiFiDirectInformationElement>,
-    connected_devices: Arc<Mutex<Vec<ConnectedDevice>>>,
-    status_changed_token: EventRegistrationToken,
-    connection_requested_token: EventRegistrationToken,
-}
-
-impl Advertiser {
-    fn start() -> Self {
-        //LISTENER
-        let str_server_port = "50001";
-        let information_elements: Vec<WiFiDirectInformationElement> = Vec::new();
-
-        let publisher: WiFiDirectAdvertisementPublisher =
-            WiFiDirectAdvertisementPublisher::new().unwrap();
-
-        let mut connected_devices: Arc<Mutex<Vec<ConnectedDevice>>> =
-            Arc::new(Mutex::new(Vec::new()));
-
-        let status_changed_token = publisher
-            .StatusChanged(&TypedEventHandler::new(Advertiser::on_status_changed))
-            .unwrap();
-
-        let listener: WiFiDirectConnectionListener = WiFiDirectConnectionListener::new().unwrap();
-
-        let connected_devices_c = Arc::clone(&connected_devices);
-        let connection_requested_token = listener
-            .ConnectionRequested(&TypedEventHandler::new(
-                move |sender: &Option<WiFiDirectConnectionListener>,
-                      args: &Option<WiFiDirectConnectionRequestedEventArgs>| {
-                    let (sender, args) = (sender.clone(), args.clone());
-                    block_on(Advertiser::on_connection_requested(
-                        &sender,
-                        &args,
-                        Arc::clone(&connected_devices_c),
-                    ));
-                    //TODO Add error handling with Result by add windows result to handler functions
-                    Ok(())
-                },
-            ))
-            .unwrap();
-
-        let discoverability = WiFiDirectAdvertisementListenStateDiscoverability::Normal;
-        publisher
-            .Advertisement()
-            .unwrap()
-            .SetListenStateDiscoverability(discoverability);
-
-        publisher
-            .Advertisement()
-            .unwrap()
-            .InformationElements()
-            .unwrap()
-            .Clear();
-
-        publisher.Start();
-        if (publisher.Status().unwrap() == WiFiDirectAdvertisementPublisherStatus::Started) {
-            println!("Advertisment Started.");
+    while created_node == false {
+        if selection == "1" {
+            let node: Node = Node::new(true).await;
+            created_node = true;
+        } else if selection == "2" {
+            let node: Node = Node::new(false).await;
+            created_node = true;
         } else {
-            println!("Advertisment Failed: Code {:?}", publisher.Status());
-        }
-        Advertiser {
-            publisher: publisher,
-            listener: listener,
-            information_elements: information_elements,
-            connected_devices: Arc::clone(&connected_devices),
-            status_changed_token: status_changed_token,
-            connection_requested_token: connection_requested_token,
+            println!("please enter a valid input");
         }
     }
-
-    fn stop(&mut self) {
-        &self.publisher.Stop();
-        &self
-            .publisher
-            .RemoveStatusChanged(&self.status_changed_token);
-        &self
-            .listener
-            .RemoveConnectionRequested(&self.connection_requested_token);
-
-        &self.information_elements.clear();
-
-        println!("Advertisment Stopped Successfully")
-    }
-    fn on_status_changed(
-        sender: &Option<WiFiDirectAdvertisementPublisher>,
-        e: &Option<WiFiDirectAdvertisementPublisherStatusChangedEventArgs>,
-    ) -> windows::Result<()> {
-        // body of your event handler
-        if matches!(e, Some(e) if e.Status().unwrap() == WiFiDirectAdvertisementPublisherStatus::Started)
-        {
-            println!("Hello");
-            Ok(())
-        } else {
-            println!(
-                "Advertisement: Status: {:?} Error: {:?}",
-                e.as_ref().unwrap().Status().unwrap(),
-                e.as_ref().unwrap().Error()
-            );
-            //Change for an error message later
-            Ok(())
-        }
-    }
-
-    async fn on_socket_connection_received(
-        sender: &Option<StreamSocketListener>,
-        e: &Option<StreamSocketListenerConnectionReceivedEventArgs>,
-        wfd_device: Arc<WiFiDirectDevice>,
-        connected_devices: Arc<Mutex<Vec<ConnectedDevice>>>,
-    ) {
-        println!("Connecting to remote side on L4 layer...");
-        let server_socket: StreamSocket = e.as_ref().unwrap().Socket().unwrap();
-
-        let socket_rw: SocketReaderWriter = SocketReaderWriter::new(server_socket);
-
-        // The first message sent is the name of the connection.
-        let mut message: HSTRING = socket_rw.read_message_async().await;
-
-        //Add this connection to the list of active connections.
-        let mut connected_devices = connected_devices.lock().unwrap();
-        connected_devices.push(ConnectedDevice {
-            display_name_in: message.clone(),
-            wfd_device_in: wfd_device,
-            socket_rw_in: socket_rw,
-        });
-
-        //Keep reading messages until the socket is closed
-        while (!&message.is_empty()) {
-            message = connected_devices
-                .last()
-                .unwrap()
-                .socket_rw_in
-                .read_message_async()
-                .await;
-        }
-    }
-
-    /*
-    async fn get_pin_from_user_async() -> HSTRING {
-        unimplemented!();
-    }
-
-    //Advanced Pairing
-
-
-    async fn request_pair_device_async(pairing: DeviceInformationPairing) -> bool {
-        let connection_params = WiFiDirectConnectionParameters::new().unwrap();
-
-        let device_pairing_kinds: DevicePairingKinds = DevicePairingKinds::ConfirmOnly
-            | DevicePairingKinds::DisplayPin
-            | DevicePairingKinds::ProvidePin;
-
-        connection_params.PreferredPairingProcedure();
-
-        let custom_pairing: DeviceInformationCustomPairing = pairing.Custom().unwrap();
-
-        //Could add a pin with custom_pairing requested()
-
-        let result: DevicePairingResult = custom_pairing
-            .PairWithProtectionLevelAndSettingsAsync(
-                device_pairing_kinds,
-                DevicePairingProtectionLevel::Default,
-                connection_params,
-            )
-            .unwrap()
-            .GetResults()
-            .unwrap();
-
-        if (result.Status().unwrap() != DevicePairingResultStatus::Paired) {
-            println!("Pair Async failed, Status: {:?}", result.Status());
-            return false;
-        }
-
-        return true;
-    }
-    */
-
-    /*
-    Advanced Pairing Parameters
-    async fn is_aep_paired_async(device_id: HSTRING) -> bool {
-        let dev_info = DeviceInformation::CreateFromIdAsyncAdditionalProperties(
-            device_id,
-            vec!["System.Devices.Aep.DeviceAddress".to_string()],
-        )
-        .unwrap()
-        .await;
-
-        match dev_info {
-            Ok(dev_info) => {
-                let device_address: HSTRING = HSTRING::try_from(
-                    dev_info
-                        .Properties()
-                        .unwrap()
-                        .Lookup("System.Devices.Aep.DeviceAddress")
-                        .unwrap(),
-                )
-                .unwrap();
-                let device_selector: String =
-                    format!("System.Devices.Aep.AepId:=\"{}\"", device_address);
-                let paired_device_collection: DeviceInformationCollection =
-                    DeviceInformation::FindAllAsyncAqsFilterAndAdditionalProperties(
-                        device_selector,
-                        DeviceInformationKind::Device.try_into().unwrap(),
-                    )
-                    .unwrap()
-                    .await
-                    .unwrap();
-                return paired_device_collection.Size().unwrap() > 0;
-            }
-
-            Err(e) => {
-                println!("Device Information is null {}", e);
-                return false;
-            }
-        }
-    }
-    */
-
-    async fn handle_connection_request_async(
-        connection_request: &WiFiDirectConnectionRequest,
-        connected_devices: Arc<Mutex<Vec<ConnectedDevice>>>,
-    ) -> bool {
-        let device_name: HSTRING = connection_request
-            .DeviceInformation()
-            .unwrap()
-            .Name()
-            .unwrap();
-        let pairing: DeviceInformationPairing = connection_request
-            .DeviceInformation()
-            .unwrap()
-            .Pairing()
-            .unwrap();
-
-        println!("Connection request recieved from {:?}", device_name);
-
-        //ask for user input to see if true TODO
-
-        let accept: bool = true;
-
-        //Decline request
-        if !accept {
-            return false;
-        }
-
-        println!("Connecting to {:?} ...", device_name);
-
-        //pair device if not already paired
-
-        // Advertiser::request_pair_device_async(pairing).await;
-
-        let wfd_device: Arc<WiFiDirectDevice> = Arc::new(
-            WiFiDirectDevice::FromIdAsync(
-                connection_request
-                    .DeviceInformation()
-                    .unwrap()
-                    .Id()
-                    .unwrap(),
-            )
-            .unwrap()
-            .await
-            .unwrap(),
-        );
-
-        // If the status of the connection is changed TODO
-        // connectionStatusChangedToken
-
-        let listener_socket: StreamSocketListener = StreamSocketListener::new().unwrap();
-        // This listenerSocket serves two purposes.
-        // 1. It keeps the listenerSocket alive until the connection is received.
-        // 2. It allows us to map the listenerSocket to the corresponding WiFiDirectDevice
-        //    when the connection is received.
-        //
-        let wfd_device_c = Arc::clone(&wfd_device);
-        listener_socket
-            .ConnectionReceived(TypedEventHandler::new(
-                move |sender: &Option<StreamSocketListener>,
-                 args: &Option<StreamSocketListenerConnectionReceivedEventArgs>| {
-                    let (sender, args) = (sender.clone(), args.clone());
-                    block_on(Advertiser::on_socket_connection_received(
-                        &sender,
-                        &args,
-                        Arc::clone(&wfd_device_c),
-                        Arc::clone(&connected_devices),
-                    ));
-                    //TODO Add error handling with Result by add windows result to handler functions
-                    Ok(())
-                },
-            ))
-            .unwrap();
-
-        let endpoint_pairs: IVectorView<EndpointPair> = Arc::clone(&wfd_device)
-            .GetConnectionEndpointPairs()
-            .unwrap();
-
-        // TODO add a global setting for the server por
-        listener_socket
-            .BindEndpointAsync(
-                endpoint_pairs.GetAt(0).unwrap().LocalHostName().unwrap(),
-                HSTRING::try_from("50001".to_string()).unwrap(),
-            )
-            .unwrap()
-            .await;
-
-        //error handling
-
-        println!(
-            "Devices connected on L2, listening on IP Address: {:?}, Port: 50001",
-            endpoint_pairs
-                .GetAt(0)
-                .unwrap()
-                .LocalHostName()
-                .unwrap()
-                .DisplayName()
-        );
-
-        return true;
-    }
-
-    async fn on_connection_requested(
-        sender: &Option<WiFiDirectConnectionListener>,
-        e: &Option<WiFiDirectConnectionRequestedEventArgs>,
-        connected_devices: Arc<Mutex<Vec<ConnectedDevice>>>,
-    ) {
-        // body of your event handler
-        let connection_request: WiFiDirectConnectionRequest =
-            e.as_ref().unwrap().GetConnectionRequest().unwrap();
-        if (!Advertiser::handle_connection_request_async(&connection_request, connected_devices)
-            .await)
-        {
-            println!(
-                "Connection request from {:?} was declined",
-                &connection_request.DeviceInformation().unwrap().Name()
-            );
-            connection_request.Close();
-        }
-    }
-}
-
-fn main() -> windows::Result<()> {
-    Ok(())
-
-    /*
-        Deprecated due to windows changing network driver model,
-        replacing NDIS driver and associated SoftAP APIs with WDI driver model.
-        Win32 is now replaced with UWP or WinRT and is be currently used.
-
-    let mut handle = HANDLE(1);
-    let mut client: *mut HANDLE = &mut handle;
-    let mut interface: *mut WLAN_INTERFACE_INFO_LIST = ptr::null_mut();
-    let mut avail_nets: *mut WLAN_AVAILABLE_NETWORK_LIST = ptr::null_mut();
-    let mut wlan_bss_list: *mut WLAN_BSS_LIST = ptr::null_mut();
-    let mut host_fail_reason: *mut WLAN_HOSTED_NETWORK_REASON = ptr::null_mut();
-    unsafe {
-        let value = WlanOpenHandle(1u32, ptr::null_mut(), &mut 1u32, client);
-        let result = WlanEnumInterfaces(*client, ptr::null_mut(), &mut interface);
-
-        for i in 0..(*interface).dwNumberOfItems {
-            println!(
-                "{:?}\n",
-                *(ptr::addr_of!((*interface).InterfaceInfo).offset(i as isize))
-            );
-        }
-
-        let guid: *const Guid = &((*interface).InterfaceInfo[0].InterfaceGuid);
-
-        println!("{:?}", *host_fail_reason);
-
-        thread::sleep(Duration::from_millis(10000));
-        let ret =
-            WlanGetAvailableNetworkList(*client, guid, 1u32, ptr::null_mut(), &mut avail_nets);
-
-        for i in 0..(*avail_nets).dwNumberOfItems {
-            let dot11Ssid: DOT11_SSID =
-                (*(ptr::addr_of!((*avail_nets).Network).offset(i as isize)))[0].dot11Ssid;
-            let dot11BssType: DOT11_BSS_TYPE =
-                (*(ptr::addr_of!((*avail_nets).Network).offset(i as isize)))[0].dot11BssType;
-            let bss = WlanGetNetworkBssList(
-                *client,
-                guid,
-                &dot11Ssid,
-                dot11BssType,
-                true,
-                ptr::null_mut(),
-                &mut wlan_bss_list,
-            );
-            println!("{:?}", *wlan_bss_list);
-        }
-
-        thread::sleep(Duration::from_millis(10000));
-        mem::drop(interface);
-        mem::drop(avail_nets);
-        mem::drop(wlan_bss_list);
-        mem::drop(guid);
-        WlanCloseHandle(*client, ptr::null_mut());
-    }
-        */
 }
 
 #[cfg(test)]
@@ -468,14 +54,14 @@ mod test {
 
     #[test]
     fn load_node_config() {
-        let node: Node = Node::load_node();
+        let config: Config = Config::load_config();
     }
     #[test]
     fn encrypt_decrypt_roundtrip() {
-        let node: Node = Node::load_node();
+        let config: Config = Config::load_config();
         let original_message = "Hello".to_string();
         let their_public: PublicKey = PublicKey::from([0u8; 32]);
-        let shared_secret = SecretKey::from(node.keys.secret_key).diffie_hellman(&their_public);
+        let shared_secret = SecretKey::from(config.keys.secret_key).diffie_hellman(&their_public);
         let enc_msg = shared_secret.encrypt(original_message.clone());
         let dec_msg = shared_secret.decrypt(enc_msg);
         assert_eq!(
@@ -484,3 +70,58 @@ mod test {
         );
     }
 }
+/*
+    Deprecated due to windows changing network driver model,
+    replacing NDIS driver and associated SoftAP APIs with WDI driver model.
+    Win32 is now replaced with UWP or WinRT and is be currently used.
+
+let mut handle = HANDLE(1);
+let mut client: *mut HANDLE = &mut handle;
+let mut interface: *mut WLAN_INTERFACE_INFO_LIST = ptr::null_mut();
+let mut avail_nets: *mut WLAN_AVAILABLE_NETWORK_LIST = ptr::null_mut();
+let mut wlan_bss_list: *mut WLAN_BSS_LIST = ptr::null_mut();
+let mut host_fail_reason: *mut WLAN_HOSTED_NETWORK_REASON = ptr::null_mut();
+unsafe {
+    let value = WlanOpenHandle(1u32, ptr::null_mut(), &mut 1u32, client);
+    let result = WlanEnumInterfaces(*client, ptr::null_mut(), &mut interface);
+
+    for i in 0..(*interface).dwNumberOfItems {
+        println!(
+            "{:?}\n",
+            *(ptr::addr_of!((*interface).InterfaceInfo).offset(i as isize))
+        );
+    }
+
+    let guid: *const Guid = &((*interface).InterfaceInfo[0].InterfaceGuid);
+
+    println!("{:?}", *host_fail_reason);
+
+    thread::sleep(Duration::from_millis(10000));
+    let ret =
+        WlanGetAvailableNetworkList(*client, guid, 1u32, ptr::null_mut(), &mut avail_nets);
+
+    for i in 0..(*avail_nets).dwNumberOfItems {
+        let dot11Ssid: DOT11_SSID =
+            (*(ptr::addr_of!((*avail_nets).Network).offset(i as isize)))[0].dot11Ssid;
+        let dot11BssType: DOT11_BSS_TYPE =
+            (*(ptr::addr_of!((*avail_nets).Network).offset(i as isize)))[0].dot11BssType;
+        let bss = WlanGetNetworkBssList(
+            *client,
+            guid,
+            &dot11Ssid,
+            dot11BssType,
+            true,
+            ptr::null_mut(),
+            &mut wlan_bss_list,
+        );
+        println!("{:?}", *wlan_bss_list);
+    }
+
+    thread::sleep(Duration::from_millis(10000));
+    mem::drop(interface);
+    mem::drop(avail_nets);
+    mem::drop(wlan_bss_list);
+    mem::drop(guid);
+    WlanCloseHandle(*client, ptr::null_mut());
+}
+    */

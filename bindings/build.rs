@@ -11,5 +11,6 @@ fn main() {
         Windows::Foundation::Collections::IVector,
         Windows::Foundation::Collections::IKeyValuePair,
         Windows::Storage::Streams::*,
+        CreateIVectorWRC::CreateIVector,
     );
 }
