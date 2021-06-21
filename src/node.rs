@@ -210,13 +210,13 @@ impl Node {
                     match event {
                         //publisher variant
                         AdvertiserEvent::Publisher(sender, args) => {
-                            println!("handling publisher event");
+                            println!("Publisher has changed state");
                             //event handler function
                             Node::on_status_changed(&sender, &args).unwrap();
                         }
                         //listener variant
                         AdvertiserEvent::Listener(sender, args) => {
-                            println!("handling listener event");
+                            println!("A Listener event has occurred.");
                             //event handler function
                             Node::on_connection_requested(
                                 &sender,
@@ -275,6 +275,8 @@ impl Node {
             // Awaiting so that the main thread doesn't finish before the other threads do. Should
             // be neverending as the event handling thread loops forever looking for events.
             //Creates the Node Structure
+
+            publisher.Start();
 
             Node {
                 publisher: publisher,
