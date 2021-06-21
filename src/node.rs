@@ -535,9 +535,22 @@ impl Node {
 
         println!("Connecting to {:?} ...", device_name);
 
-        //pair device if not already paired
+        let is_paired: bool = (Node::is_aep_paired_async(
+            connection_request
+                .DeviceInformation()
+                .unwrap()
+                .Id()
+                .unwrap(),
+        )
+        .await)
+            || (pairing.IsPaired().unwrap() == true);
 
-        // Node::request_pair_device_async(pairing).await;
+        if (!is_paired) {
+            //pair device if not already paired
+            if (!Node::request_pair_device_async(pairing).await) {
+                return false;
+            }
+        }
 
         //New WiFi Device
         let wfd_device: Arc<WiFiDirectDevice> = Arc::new(
@@ -644,7 +657,12 @@ impl Node {
         let device_info = discovered_device.clone().device_info;
 
         println!("Connecting to {:?} ...", device_info.Name().unwrap());
+        if (!device_info.Pairing().unwrap().IsPaired().unwrap()) {
+            //pair device if not already paired
+            if (!Node::request_pair_device_async(device_info.Pairing().unwrap()).await) {}
+        }
 
+        println!("{:?}", device_info.Id());
         let wfd_device: Arc<WiFiDirectDevice> = Arc::new(
             WiFiDirectDevice::FromIdAsync(device_info.Id().unwrap())
                 .unwrap()
@@ -722,20 +740,11 @@ impl Node {
         });
     }
 
-    /*
-    async fn get_pin_from_user_async() -> HSTRING {
-        unimplemented!();
-    }
-
-    //Advanced Pairing
-
-
+    //Pairing
     async fn request_pair_device_async(pairing: DeviceInformationPairing) -> bool {
         let connection_params = WiFiDirectConnectionParameters::new().unwrap();
 
-        let device_pairing_kinds: DevicePairingKinds = DevicePairingKinds::ConfirmOnly
-            | DevicePairingKinds::DisplayPin
-            | DevicePairingKinds::ProvidePin;
+        let device_pairing_kinds: DevicePairingKinds = DevicePairingKinds::None;
 
         connection_params.PreferredPairingProcedure();
 
@@ -746,7 +755,7 @@ impl Node {
         let result: DevicePairingResult = custom_pairing
             .PairWithProtectionLevelAndSettingsAsync(
                 device_pairing_kinds,
-                DevicePairingProtectionLevel::Default,
+                DevicePairingProtectionLevel::None,
                 connection_params,
             )
             .unwrap()
@@ -760,17 +769,18 @@ impl Node {
 
         return true;
     }
-    */
 
-    /*
-    Advanced Pairing Parameters
     async fn is_aep_paired_async(device_id: HSTRING) -> bool {
-        let dev_info = DeviceInformation::CreateFromIdAsyncAdditionalProperties(
-            device_id,
-            vec!["System.Devices.Aep.DeviceAddress".to_string()],
-        )
-        .unwrap()
-        .await;
+        let prop: IVector<HSTRING> = CreateIVector::CreateVector().unwrap();
+
+        prop.InsertAt(
+            0,
+            HSTRING::try_from("System.Devices.Aep.DeviceAddress").unwrap(),
+        );
+
+        let dev_info = DeviceInformation::CreateFromIdAsyncAdditionalProperties(device_id, prop)
+            .unwrap()
+            .await;
 
         match dev_info {
             Ok(dev_info) => {
@@ -784,10 +794,14 @@ impl Node {
                 .unwrap();
                 let device_selector: String =
                     format!("System.Devices.Aep.AepId:=\"{}\"", device_address);
+                let device_info_kind: IVector<HSTRING> = CreateIVector::CreateVector().unwrap();
+
+                //DeviceInformationKind::Device = 3
+                device_info_kind.InsertAt(0, HSTRING::try_from("3".to_string()).unwrap());
                 let paired_device_collection: DeviceInformationCollection =
                     DeviceInformation::FindAllAsyncAqsFilterAndAdditionalProperties(
                         device_selector,
-                        DeviceInformationKind::Device.try_into().unwrap(),
+                        device_info_kind,
                     )
                     .unwrap()
                     .await
@@ -801,7 +815,6 @@ impl Node {
             }
         }
     }
-    */
 }
 
 //TODO: MOVE ADVERTISER INTO SEPARATE FILE, Possibly make it the node and have a generic structure.
