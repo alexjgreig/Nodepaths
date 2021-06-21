@@ -45,7 +45,7 @@ impl SocketReaderWriter {
         println!("Sent Message {:?}", message.clone());
         //error handling
     }
-    pub async fn read_message_async(&self) -> HSTRING {
+    pub async fn read_message_async(&self) {
         let mut bytes_read: u32 = self
             .data_reader
             .LoadAsync(u32::MAX)
@@ -63,9 +63,7 @@ impl SocketReaderWriter {
             if bytes_read > 0 {
                 let message: HSTRING = self.data_reader.ReadString(message_length).unwrap();
                 println!("Receieved Message: {:?}", message);
-                return message;
             }
         }
-        return HSTRING::new();
     }
 }

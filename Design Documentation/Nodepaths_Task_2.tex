@@ -289,21 +289,23 @@ The Elliptic-Curve Cryptographic Algorithm is efficient and as fast as simply cr
 	morekeywords={BEGIN, END, DISPLAY, INPUT, IF, ENDIF, WHILE, DO, ELSE, THEN, OR, OPEN, RETURN, WRITE, NEXT, FOR, APPEND, CLOSE, PASS, AND, OUTPUT}
 }
 \begin{lstlisting}[caption=Rust Tests, escapechar=\@]
-
 	#[cfg(test)]
 	mod test {
 	    use super::*;
 
+	    // loads node config from a file or creates a new file if not avaliable.
 	    #[test]
 	    fn load_node_config() {
-		let node: Node = Node::load_node();
+		let config: Config = Config::load_config();
 	    }
 	    #[test]
+	    // Encryption and Decryption Roundtrip - encrypts then decrypts and the starting message needs
+	    // to match to the message after the round trip
 	    fn encrypt_decrypt_roundtrip() {
-		let node: Node = Node::load_node();
+		let config: Config = Config::load_config();
 		let original_message = "Hello".to_string();
 		let their_public: PublicKey = PublicKey::from([0u8; 32]);
-		let shared_secret = SecretKey::from(node.keys.secret_key).diffie_hellman(&their_public);
+		let shared_secret = SecretKey::from(config.keys.secret_key).diffie_hellman(&their_public);
 		let enc_msg = shared_secret.encrypt(original_message.clone());
 		let dec_msg = shared_secret.decrypt(enc_msg);
 		assert_eq!(
@@ -311,17 +313,35 @@ The Elliptic-Curve Cryptographic Algorithm is efficient and as fast as simply cr
 		    dec_msg.trim_end_matches(char::from(0))
 		);
 	    }
+	    //Advertiser node creation - Uses boolean to specificy that it is this variant.
+	    #[test]
+	    async fn advertiser_node_creation() {
+		let node: Node = tokio_test::block_on(Node::new(true));
+	    }
+
+	    //Connector node creation - Uses boolean to specificy that it is this variant.
+	    #[test]
+	    async fn connector_node_creation() {
+		let node: Node = tokio_test::block_on(Node::new(false));
+	    }
 	}
 \end{lstlisting}
 \renewcommand{\rmdefault}{cmr}
-As shown above, I have implemented tests into the my Rust application. The two tests above check if the application is able to: \\
+As shown above, I have implemented tests into the my Rust application. The four tests above check if the application is able to: \\
 
 1) Open or create a TOML file which is the configuration for the user's node and load it into the program from storage to memory to be utilised by the application. \\
 
 2) Perform a roundtrip from an original message, to an encrypted message using the curve25519 and AES encryption scheme then finally decrypt the message. It then checks if the decrypted message is the same as the original message as this is needed for end-to-end lossless encrypted data transfer. The macro "assert\_eq" checks whether the original and decrypted message are the same.\\
 
-Below is the output that is returned to the developer when you run the unit tests and when both tests pass: \\
+3) Create a new node that has the capability to perform WiFi Direct advertising functionality, furthermore it starts a new instance of the publisher and connection listener. This new method, also creates the event handler which listens and acts on events that occur such as an connection requested event or a a status changed event. Therefore, this test checks to see if all those functionalities are working.\\
+
+4) Similarly to the third test, this test creates a new node that has the capability to perform WiFi Direct Connecting functions. It starts a new instance of the publisher, however, differently from the advertiser it scans through the available devices on your windows machine and from that will find the WiFi Device. It also establishes an event handler that checks for new devices or enumeration of devices being complete. And thus, this test checks that all these functions of a connector node are operational.\\
+
+Below is the output that is returned to the developer when you run the unit tests and when all four tests pass: \\
 
 \includegraphics[width=1\textwidth]{tests_running.png}\par
+
+I have also, throughout the process of creating the application, tested and debugged. For instance I ran a debugger on the binary stopping at certain breakpoints and inspecting memory locations for changes in variables. The testing I have done allowed me to create this application.
+
 \end{document}
 

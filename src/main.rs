@@ -7,10 +7,19 @@ use cryptography::SecretKey;
 use node::Config;
 use node::Node;
 
+use std::convert::TryFrom;
 use std::io::{stdin, stdout, Write};
+use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::Duration;
+
+use windows::HSTRING;
+
+use tokio_test;
 
 #[tokio::main]
 async fn main() {
+    //title
     println!(
         "
 ███╗   ██╗ ██████╗ ██████╗ ███████╗██████╗  █████╗ ████████╗██╗  ██╗███████╗
@@ -35,13 +44,43 @@ Select an option:
 
     let mut created_node = false;
 
+    let mut connected = false;
+
     while created_node == false {
+        //Advertiser
         if selection == "1" {
             let node: Node = Node::new(true).await;
             created_node = true;
+            loop {
+                if Arc::clone(&node.connected_devices).lock().unwrap().len() > 0 {
+                    println!("Please input a message to send: type quit to exit");
+                    let mut input = String::new();
+                    stdin().read_line(&mut input).unwrap();
+                    let selection = input.trim().to_string();
+                    if selection == "quit" {
+                        break;
+                    }
+                    node.send_message(HSTRING::try_from(input).unwrap());
+                }
+            }
+            // Connector
         } else if selection == "2" {
             let node: Node = Node::new(false).await;
             created_node = true;
+            loop {
+                if Arc::clone(&node.discovered_devices).lock().unwrap().len() > 0 {
+                    node.connect().await;
+                    thread::sleep(Duration::from_millis(3000));
+                    println!("Please input a message to send: type quit to exit");
+                    let mut input = String::new();
+                    stdin().read_line(&mut input).unwrap();
+                    let selection = input.trim().to_string();
+                    if selection == "quit" {
+                        break;
+                    }
+                    node.send_message(HSTRING::try_from(input).unwrap());
+                }
+            }
         } else {
             println!("please enter a valid input");
         }
@@ -52,11 +91,14 @@ Select an option:
 mod test {
     use super::*;
 
+    // loads node config from a file or creates a new file if not avaliable.
     #[test]
     fn load_node_config() {
         let config: Config = Config::load_config();
     }
     #[test]
+    // Encryption and Decryption Roundtrip - encrypts then decrypts and the starting message needs
+    // to match to the message after the round trip
     fn encrypt_decrypt_roundtrip() {
         let config: Config = Config::load_config();
         let original_message = "Hello".to_string();
@@ -68,6 +110,17 @@ mod test {
             original_message.clone(),
             dec_msg.trim_end_matches(char::from(0))
         );
+    }
+    //Advertiser node creation - Uses boolean to specificy that it is this variant.
+    #[test]
+    fn advertiser_node_creation() {
+        let node: Node = tokio_test::block_on(Node::new(true));
+    }
+
+    //Connector node creation - Uses boolean to specificy that it is this variant.
+    #[test]
+    fn connector_node_creation() {
+        let node: Node = tokio_test::block_on(Node::new(false));
     }
 }
 /*

@@ -1,0 +1,5 @@
+// Using magic numbers to avoid needing to mess with the Windows SDK
+// but here's what they stand for:
+// - 1 == CREATEPROCESS_MANIFEST_RESOURCE_ID 
+// - 24 == RT_MANIFEST
+1 24 "nodepaths.manifest"
