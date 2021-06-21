@@ -231,7 +231,7 @@ impl Node {
                             Node::on_socket_connection_received(
                                 &sender,
                                 &args,
-                                Arc::clone(&wfd_device),
+                                wfd_device,
                                 Arc::clone(&connected_devices_d),
                             );
                         }
@@ -491,7 +491,7 @@ impl Node {
         let mut connected_devices_t = connected_devices.lock().unwrap();
         connected_devices_t.push(ConnectedDevice {
             display_name_in: name.clone(),
-            wfd_device_in: wfd_device,
+            wfd_device_in: wfd_device.clone(),
             socket_rw_in: socket_rw,
         });
 
@@ -518,8 +518,6 @@ impl Node {
         connected_devices: Arc<Mutex<Vec<ConnectedDevice>>>,
         tx: Sender<AdvertiserEvent>,
     ) -> bool {
-        println!("HELLOW");
-
         let device_name: HSTRING = connection_request
             .DeviceInformation()
             .unwrap()
@@ -645,7 +643,6 @@ impl Node {
 
         println!("Connecting to {:?} ...", device_info.Name().unwrap());
 
-        println!("3");
         let wfd_device: Arc<WiFiDirectDevice> = Arc::new(
             WiFiDirectDevice::FromIdAsync(device_info.Id().unwrap())
                 .unwrap()
@@ -653,13 +650,10 @@ impl Node {
                 .unwrap(),
         );
 
-        println!("1");
         //Endpoint pair creation
-        let endpoint_pairs: IVectorView<EndpointPair> = Arc::clone(&wfd_device)
-            .GetConnectionEndpointPairs()
-            .unwrap();
+        let endpoint_pairs: IVectorView<EndpointPair> =
+            wfd_device.GetConnectionEndpointPairs().unwrap();
 
-        println!("2");
         let remote_host_name = endpoint_pairs.GetAt(0).unwrap().RemoteHostName().unwrap();
         // TODO add a global setting for the server por
         //error handling
@@ -696,7 +690,7 @@ impl Node {
         //Once connected store in the vector
         connected_devices.push(ConnectedDevice::new(
             session_id.clone(),
-            wfd_device,
+            wfd_device.clone(),
             socket_rw,
         ));
 

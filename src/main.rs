@@ -38,14 +38,17 @@ Select an option:
 (2) Connect
 "
     );
+    //gets user input for selection
     let mut input = String::new();
     stdin().read_line(&mut input).unwrap();
     let selection = input.trim().to_string();
 
+    //boolean value for created yet
+
     let mut created_node = false;
 
-    let mut connected = false;
-
+    //outside while loop for creation of node, breaks if has been created and everything else has
+    //broken
     while created_node == false {
         //Advertiser
         if selection == "1" {
@@ -57,9 +60,11 @@ Select an option:
                     let mut input = String::new();
                     stdin().read_line(&mut input).unwrap();
                     let selection = input.trim().to_string();
+                    //User quits program
                     if selection == "quit" {
                         break;
                     }
+                    //Send message to other machine
                     node.send_message(HSTRING::try_from(input).unwrap());
                 }
             }
@@ -75,9 +80,11 @@ Select an option:
                     let mut input = String::new();
                     stdin().read_line(&mut input).unwrap();
                     let selection = input.trim().to_string();
+                    //user quites program
                     if selection == "quit" {
                         break;
                     }
+                    //Send message to other machine
                     node.send_message(HSTRING::try_from(input).unwrap());
                 }
             }
